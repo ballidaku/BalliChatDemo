@@ -223,7 +223,7 @@ public class MainActivity extends AppCompatActivity
 
     public void getSubscribedGroups(final String groupID)
     {
-        Query queryRef3 = Firebase.getInstance().getMySubscribeGroupsDATA(context, groupID);
+        Query queryRef3 = Firebase.getInstance().getMySubscribeGroupsDATA(groupID);
 
         queryRef3.addValueEventListener(new ValueEventListener()
         {

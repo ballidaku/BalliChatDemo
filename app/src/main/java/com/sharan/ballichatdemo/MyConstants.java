@@ -27,4 +27,7 @@ public class MyConstants
     public final static String ADMIN_NAME="AdminName";
     public final static String ADMIN_ID="AdminID";
 
+
+    public static final String IS_CHAT_ROOM_ACTIVE="IsChatRoomActive";
+    public static final String SENDER_NAME="SenderName";
 }

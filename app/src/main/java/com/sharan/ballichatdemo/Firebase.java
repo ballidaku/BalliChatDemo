@@ -59,7 +59,7 @@ public class Firebase
 
         HashMap<String, Object> result = new HashMap<>();
         result.put(MyConstants.USER_NAME, username);
-        result.put( MyConstants.FCM_TOKEN,MySharedPreference.getInstance().getFCM_TOKEN(context));
+        result.put(MyConstants.FCM_TOKEN, MySharedPreference.getInstance().getFCM_TOKEN(context));
 
         root.child(MyConstants.USERS).child(userID).updateChildren(result).addOnCompleteListener(new OnCompleteListener<Void>()
         {
@@ -69,8 +69,6 @@ public class Firebase
                 if (task.isSuccessful())
                 {
                     MySharedPreference.getInstance().saveUser(context, username, userID);
-
-                  //  updateToken(context,userID);
 
                     Toast.makeText(context, "User Created Successfull", Toast.LENGTH_SHORT).show();
 
@@ -86,14 +84,23 @@ public class Firebase
 
     public void createGroup(final Context context, final String groupName)
     {
+
+
+        String userId = MySharedPreference.getInstance().getUSER_ID(context);
+        String userName = MySharedPreference.getInstance().getUSER_NAME(context);
+        String groupID = getUniqueID();
+
         HashMap<String, Object> result = new HashMap<>();
-        result.put(MyConstants.GROUP_ID, getUniqueID());
+        result.put(MyConstants.GROUP_ID, groupID);
         result.put(MyConstants.GROUP_NAME, groupName);
-        result.put(MyConstants.ADMIN_NAME, MySharedPreference.getInstance().getUSER_NAME(context));
-        result.put(MyConstants.ADMIN_ID, MySharedPreference.getInstance().getUSER_ID(context));
+        result.put(MyConstants.ADMIN_NAME, userName);
+        result.put(MyConstants.ADMIN_ID, userId);
 
 
         root.child(MyConstants.GROUP_CHAT_NAMES).push().updateChildren(result);
+
+        // After creating the group admin is subscribed to his own group
+        subscribeUserToGroup(userId,userName,groupID);
     }
 
 
@@ -111,7 +118,7 @@ public class Firebase
         return root.child(MyConstants.SUBSCRIBERS);
     }
 
-    public Query getMySubscribeGroupsDATA(Context context, String groupID)
+    public Query getMySubscribeGroupsDATA(String groupID)
     {
         return root.child(MyConstants.GROUP_CHAT_NAMES).orderByChild(MyConstants.GROUP_ID).equalTo(groupID);
     }
@@ -121,14 +128,25 @@ public class Firebase
         return root.child(MyConstants.USERS);
     }
 
+    public Query getUserFcmToken(String userID)
+    {
+        return root.child(MyConstants.USERS).child(userID);
+    }
+
     public void subscribeUserToGroup(String userID, String userName, String groupID)
     {
         HashMap<String, Object> result = new HashMap<>();
         result.put(userID, userName);
-//        result.put(groupID, userID);
 
         root.child(MyConstants.SUBSCRIBERS).child(groupID).updateChildren(result);
     }
+
+
+    public Query getGroupSubscribedUsers(String groupID)
+    {
+       return root.child(MyConstants.SUBSCRIBERS).child(groupID);
+    }
+
 
 /*    public void updateToken(Context context,String userID)
     {
@@ -149,9 +167,9 @@ public class Firebase
 
     public void sendNotification(String fcmID, HashMap<String, String> map)
     {
-       // String TO = "d87QHGv1CbU:APA91bGg1A0ntLpqcmQhlXU4RckCe9sSIqfmwdiHxLbkenSTVJc-gZMHdT6YVMQxDroUQXKNQOr04QbjUhqI3UtLfmp-svZqPPS-aRt7rewiGDDotcYlByOF6TUOzOfOLX6s99477KZb";
+        // String TO = "d87QHGv1CbU:APA91bGg1A0ntLpqcmQhlXU4RckCe9sSIqfmwdiHxLbkenSTVJc-gZMHdT6YVMQxDroUQXKNQOr04QbjUhqI3UtLfmp-svZqPPS-aRt7rewiGDDotcYlByOF6TUOzOfOLX6s99477KZb";
 
-        String body123 = "{\n\t\"to\": \" "+ fcmID + "\",\n\t\"notification\" :"+convert(map)+"\n}";
+        String body123 = "{\n\t\"to\": \" " + fcmID + "\",\n\t\"notification\" :" + convert(map) + "\n}";
 
         Log.e("DataToSend", "" + body123);
 
@@ -164,7 +182,7 @@ public class Firebase
         Request request = new Request.Builder()
                 .url("https://fcm.googleapis.com/fcm/send")
                 .post(body)
-                .addHeader("authorization", "key="+MyConstants.SERVER_KEY)
+                .addHeader("authorization", "key=" + MyConstants.SERVER_KEY)
                 .addHeader("content-type", "application/json")
                 .addHeader("cache-control", "no-cache")
                 //.addHeader("postman-token", "dfe29a6f-e40a-6b27-4065-6a25b103db56")

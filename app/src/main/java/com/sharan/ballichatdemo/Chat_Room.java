@@ -32,14 +32,18 @@ public class Chat_Room extends AppCompatActivity implements View.OnClickListener
     private EditText input_msg;
     private TextView chat_conversation;
 
-    private String user_name, groupName, groupID;
+    private String userName, groupName, groupID;
     private DatabaseReference root;
     private String temp_key;
 
     private String chat_msg, chat_user_name;
 
+    String myUserID;
+
 
     Context context;
+
+    ArrayList<HashMap<String, String>> listUsersWithFcmToken = new ArrayList<HashMap<String, String>>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -48,7 +52,10 @@ public class Chat_Room extends AppCompatActivity implements View.OnClickListener
         setContentView(R.layout.activity_chat__room);
 
 
-        context =this;
+        context = this;
+
+
+        myUserID = MySharedPreference.getInstance().getUSER_ID(context);
 
         btn_send_msg = (Button) findViewById(R.id.btn_send);
         input_msg = (EditText) findViewById(R.id.msg_input);
@@ -57,18 +64,21 @@ public class Chat_Room extends AppCompatActivity implements View.OnClickListener
 
         findViewById(R.id.btn_add_user).setOnClickListener(this);
 
-        user_name = MySharedPreference.getInstance().getUSER_NAME(context);
+        userName = MySharedPreference.getInstance().getUSER_NAME(context);
 
         groupName = getIntent().getExtras().get(MyConstants.GROUP_NAME).toString();
         groupID = getIntent().getExtras().get(MyConstants.GROUP_ID).toString();
 
 
-        Log.e("groupID",""+groupID);
+        Log.e("groupID", "" + groupID);
 
         setTitle(" Room - " + groupName);
 
-        // root = FirebaseDatabase.getInstance().getReference().child(room_name);
         root = FirebaseDatabase.getInstance().getReference().child(MyConstants.GROUP_CHATS).child(groupID);
+
+
+        getSubscribedUsers();
+
 
         btn_send_msg.setOnClickListener(new View.OnClickListener()
         {
@@ -76,17 +86,39 @@ public class Chat_Room extends AppCompatActivity implements View.OnClickListener
             public void onClick(View view)
             {
 
+                String messageText = input_msg.getText().toString().trim();
+
                 Map<String, Object> map = new HashMap<String, Object>();
                 temp_key = root.push().getKey();
                 root.updateChildren(map);
 
                 DatabaseReference message_root = root.child(temp_key);
                 Map<String, Object> map2 = new HashMap<String, Object>();
-                map2.put(MyConstants.USER_NAME, user_name);
-                map2.put(MyConstants.MESSAGE, input_msg.getText().toString());
+                map2.put(MyConstants.USER_NAME, userName);
+                map2.put(MyConstants.MESSAGE, messageText);
                 map2.put(MyConstants.GROUP_NAME, groupName);
 
                 message_root.updateChildren(map2);
+
+
+                //Notification send to other user
+
+                String message = "{\n" +
+                        "  \"GroupID\": \"" + groupID + "\",\n" +
+                        "  \"GroupName\": \"" + groupName + "\",\n" +
+                        "  \"Message\": \"" + groupName + " : " + messageText + "\",\n" +
+                        "  \"SenderName\": \"" + userName + "\"\n" +
+                        "}";
+
+
+                for (int i = 0; i < listUsersWithFcmToken.size(); i++)
+                {
+                    HashMap<String, String> message_map = new HashMap<String, String>();
+                    message_map.put("title", "BalliChatDemo");
+                    message_map.put("body", message);
+
+                    Firebase.getInstance().sendNotification(listUsersWithFcmToken.get(i).get(MyConstants.FCM_TOKEN), message_map);
+                }
 
 
                 input_msg.setText("");
@@ -132,7 +164,6 @@ public class Chat_Room extends AppCompatActivity implements View.OnClickListener
     }
 
 
-
     private void append_chat_conversation(DataSnapshot dataSnapshot)
     {
 
@@ -144,15 +175,6 @@ public class Chat_Room extends AppCompatActivity implements View.OnClickListener
             chat_msg = (String) ((DataSnapshot) i.next()).getValue();
             chat_user_name = (String) ((DataSnapshot) i.next()).getValue();
 
-
-
-           // groupName = (String) ((DataSnapshot) i.next()).getValue();
-//            chat_msg = (String) ((DataSnapshot) i.next()).getValue();
-
-
-//            Log.e("1",(String) ((DataSnapshot)i.next()).getValue());
-//            Log.e("2",(String) ((DataSnapshot)i.next()).getValue());
-//            Log.e("3",(String) ((DataSnapshot)i.next()).getValue());
 
             chat_conversation.append(chat_user_name + " : " + chat_msg + " \n");
         }
@@ -167,15 +189,15 @@ public class Chat_Room extends AppCompatActivity implements View.OnClickListener
         {
             case R.id.btn_add_user:
 
-                getUsers();
+                getAllUsers();
 
                 break;
         }
     }
 
-    private void getUsers()
+    private void getAllUsers()
     {
-        Query queryRef =Firebase.getInstance().getUsers();
+        Query queryRef = Firebase.getInstance().getUsers();
 
         queryRef.addValueEventListener(new ValueEventListener()
         {
@@ -183,32 +205,36 @@ public class Chat_Room extends AppCompatActivity implements View.OnClickListener
             public void onDataChange(DataSnapshot dataSnapshot)
             {
 
-                Log.e("ba",""+dataSnapshot.getValue());
+                Log.e("ba", "" + dataSnapshot.getValue());
 
-                ArrayList<HashMap<String,String>> list=new ArrayList<HashMap<String, String>>();
+                ArrayList<HashMap<String, String>> list = new ArrayList<HashMap<String, String>>();
 
                 Iterator i = dataSnapshot.getChildren().iterator();
                 while (i.hasNext())
                 {
                     DataSnapshot s = (DataSnapshot) i.next();
 
-                    if(!(s.getKey().equals(MySharedPreference.getInstance().getUSER_ID(context))))
+                    if (!(s.getKey().equals(myUserID)))
                     {
 
                         HashMap<String, String> map = new HashMap<String, String>();
 
                         map.put(MyConstants.FCM_TOKEN, (String) s.child(MyConstants.FCM_TOKEN).getValue());
                         map.put(MyConstants.USER_NAME, (String) s.child(MyConstants.USER_NAME).getValue());
-                        map.put(MyConstants.USER_ID, (String) s.getKey());
+                        map.put(MyConstants.USER_ID, s.getKey());
 
                         list.add(map);
                     }
 
                 }
 
-                showUsers(list);
+                if (MySharedPreference.getInstance().getActivityState(context))
+                {
+                    showUsers(list);
+                }
 
-                Log.e("List",""+list);
+
+                Log.e("List", "" + list);
 
             }
 
@@ -222,33 +248,41 @@ public class Chat_Room extends AppCompatActivity implements View.OnClickListener
 
     private void showUsers(final ArrayList<HashMap<String, String>> list)
     {
-       final AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        final AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Add Users in this group");
 
-        SimpleAdapter arrayAdapter = new SimpleAdapter(this, list, R.layout.custom_view, new String[] { MyConstants.USER_NAME },new int[]{R.id.txtv_group_name});
+        SimpleAdapter arrayAdapter = new SimpleAdapter(this, list, R.layout.custom_view, new String[]{MyConstants.USER_NAME}, new int[]{R.id.txtv_group_name});
 
 
         final ListView listView = new ListView(this);
         listView.setAdapter(arrayAdapter);
 
 
-
         builder.setView(listView);
 
-       final AlertDialog ad = builder.show();
+        final AlertDialog ad = builder.show();
 
         listView.setOnItemClickListener(new AdapterView.OnItemClickListener()
         {
             @Override
             public void onItemClick(AdapterView<?> adapterView, View view, int i, long l)
             {
-                subscribeToThisGroup(list.get(i).get(MyConstants.USER_ID),list.get(i).get(MyConstants.USER_NAME));
+                subscribeToThisGroup(list.get(i).get(MyConstants.USER_ID), list.get(i).get(MyConstants.USER_NAME));
+                String msg = "You are added in the group " + groupName + " by " + MySharedPreference.getInstance().getUSER_NAME(context);
 
-               HashMap<String,String> map=new HashMap<String, String>();
-                map.put("title","Subscription");
-                map.put("body","You are added in the group "+groupName+" by "+MySharedPreference.getInstance().getUSER_NAME(context));
+                String message = "{\n" +
+                        "  \"GroupID\": \"" + groupID + "\",\n" +
+                        "  \"GroupName\": \"" + groupName + "\",\n" +
+                        "  \"Message\": \"" + msg + "\",\n" +
+                        "  \"SenderName\": \"" + userName + "\"\n" +
+                        "}";
 
-                Firebase.getInstance().sendNotification(list.get(i).get(MyConstants.FCM_TOKEN),map);
+
+                HashMap<String, String> map = new HashMap<String, String>();
+                map.put("title", "Subscription");
+                map.put("body", message);
+
+                Firebase.getInstance().sendNotification(list.get(i).get(MyConstants.FCM_TOKEN), map);
 
                 ad.dismiss();
             }
@@ -259,8 +293,109 @@ public class Chat_Room extends AppCompatActivity implements View.OnClickListener
 
     private void subscribeToThisGroup(String userID, String userName)
     {
-        Firebase.getInstance().subscribeUserToGroup(userID,userName,groupID);
+        Firebase.getInstance().subscribeUserToGroup(userID, userName, groupID);
     }
 
 
+    // First to get userIds which arer subcribed to group using groupID and then get users FcmToken from users group
+
+
+    public void getSubscribedUsers()
+    {
+        listUsersWithFcmToken.clear();
+
+        Firebase.getInstance().getGroupSubscribedUsers(groupID).addValueEventListener(new ValueEventListener()
+        {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot)
+            {
+                //   Log.e("Subscribers", "" + dataSnapshot.getValue());
+
+
+                Iterator i = dataSnapshot.getChildren().iterator();
+                while (i.hasNext())
+                {
+                    DataSnapshot s = (DataSnapshot) i.next();
+
+                    String userId = s.getKey();
+                    if (!userId.equals(myUserID))
+                    {
+                        HashMap<String, String> map = new HashMap<String, String>();
+
+                        map.put(MyConstants.USER_NAME, (String) s.getValue());
+                        map.put(MyConstants.USER_ID, userId);
+                        map.put(MyConstants.FCM_TOKEN, "");
+
+                        listUsersWithFcmToken.add(map);
+                    }
+
+                }
+                //  Log.e("List", "" + listUsersWithFcmToken);
+
+
+                for (int j = 0; j < listUsersWithFcmToken.size(); j++)
+                {
+                    final int position = j;
+                    Firebase.getInstance().getUserFcmToken(listUsersWithFcmToken.get(position).get(MyConstants.USER_ID)).addValueEventListener(new ValueEventListener()
+                    {
+                        @Override
+                        public void onDataChange(DataSnapshot dataSnapshot)
+                        {
+
+                            //  Log.e("Response", "" + dataSnapshot.getValue());
+
+                            String token = (String) dataSnapshot.child(MyConstants.FCM_TOKEN).getValue();
+
+
+                            //  Log.e("FCM", "" + token);
+
+                            HashMap<String, String> map = new HashMap<String, String>();
+                            map.put(MyConstants.USER_NAME, listUsersWithFcmToken.get(position).get(MyConstants.USER_NAME));
+                            map.put(MyConstants.USER_ID, listUsersWithFcmToken.get(position).get(MyConstants.USER_ID));
+                            map.put(MyConstants.FCM_TOKEN, token);
+
+
+                            listUsersWithFcmToken.set(position, map);
+
+
+                            Log.e("listUsersWithFcmToken", "" + listUsersWithFcmToken);
+                        }
+
+                        @Override
+                        public void onCancelled(DatabaseError databaseError)
+                        {
+
+                        }
+                    });
+
+                }
+
+
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError)
+            {
+
+            }
+        });
+    }
+
+
+    @Override
+    protected void onResume()
+    {
+
+        MySharedPreference.getInstance().saveActivityState(context, true);
+        MySharedPreference.getInstance().saveCurrentGroupID(context, groupID);
+        super.onResume();
+    }
+
+    @Override
+    protected void onPause()
+    {
+        MySharedPreference.getInstance().saveActivityState(context, false);
+        MySharedPreference.getInstance().saveCurrentGroupID(context, "");
+        super.onPause();
+    }
 }

@@ -70,4 +70,33 @@ public class MySharedPreference
         return getPreference(context).getString(MyConstants.FCM_TOKEN,"");
     }
 
+
+
+    //To check is Chat_Room opened or not
+
+    public void saveActivityState(Context context,boolean isActive)
+    {
+        SharedPreferences.Editor editor = getPreference(context).edit();
+        editor.putBoolean(MyConstants.IS_CHAT_ROOM_ACTIVE, isActive);
+        editor.apply();
+    }
+
+    public boolean getActivityState(Context context)
+    {
+        return getPreference(context).getBoolean(MyConstants.IS_CHAT_ROOM_ACTIVE,false);
+    }
+
+
+    //To check current chat Group ID
+    public void saveCurrentGroupID(Context context,String groupID)
+    {
+        SharedPreferences.Editor editor = getPreference(context).edit();
+        editor.putString(MyConstants.GROUP_ID, groupID);
+        editor.apply();
+    }
+
+    public String getCurrentGroupID(Context context)
+    {
+        return getPreference(context).getString(MyConstants.GROUP_ID,"");
+    }
 }
